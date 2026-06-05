@@ -75,7 +75,11 @@ def load_email_config():
     to_emails = config["to_emails"]
 
     if isinstance(to_emails, str):
-        config["to_emails"] = [email.strip() for email in to_emails.split(",") if email.strip()]
+        config["to_emails"] = [
+            email.strip()
+            for email in to_emails.split(",")
+            if email.strip()
+        ]
     elif not isinstance(to_emails, list):
         raise ValueError("配置中的 'to_emails' 应为一个邮件地址列表或逗号分隔的字符串")
 
@@ -99,9 +103,9 @@ def load_telegram_config():
     return tg_id, tg_token
 
 
-def get_weather_html(weather_config):
-    """获取天气信息并生成 HTML 邮件内容"""
-    if not weather_config or not weather_config.get("enabled"):
+def get_single_weather_html(weather_config):
+    """获取单个地点天气信息并生成 HTML"""
+    if not weather_config or not weather_config.get("enabled", True):
         return ""
 
     city = weather_config.get("city", "当前城市")
@@ -111,10 +115,10 @@ def get_weather_html(weather_config):
     forecast_days = int(weather_config.get("forecast_days", 3))
 
     if latitude is None or longitude is None:
-        return """
+        return f"""
         <hr>
-        <h2>天气信息配置错误</h2>
-        <p>缺少 latitude 或 longitude，已跳过天气信息。</p>
+        <h2>{city}天气信息配置错误</h2>
+        <p>缺少 latitude 或 longitude，已跳过该地点天气信息。</p>
         """
 
     url = "https://api.open-meteo.com/v1/forecast"
@@ -135,7 +139,7 @@ def get_weather_html(weather_config):
     except Exception as e:
         return f"""
         <hr>
-        <h2>天气信息获取失败</h2>
+        <h2>{city}天气信息获取失败</h2>
         <p>原因：{str(e)}</p>
         """
 
@@ -180,7 +184,16 @@ def get_weather_html(weather_config):
     rain_prob = daily.get("precipitation_probability_max", [])
     wind_max = daily.get("wind_speed_10m_max", [])
 
-    for i in range(len(times)):
+    row_count = min(
+        len(times),
+        len(codes),
+        len(temp_max),
+        len(temp_min),
+        len(rain_prob),
+        len(wind_max)
+    )
+
+    for i in range(row_count):
         html += f"""
         <tr>
             <td>{times[i]}</td>
@@ -195,16 +208,48 @@ def get_weather_html(weather_config):
     html += "</table>"
 
     if rain_prob and rain_prob[0] is not None and rain_prob[0] >= 50:
-        html += """
+        html += f"""
         <p>
-            <strong>提醒：</strong>今天降水概率较高，出门建议带伞。
+            <strong>{city}提醒：</strong>今天降水概率较高，出门建议带伞。
         </p>
         """
 
     return html
 
 
-def send_email(smtp_server, smtp_port, smtp_user, smtp_pass, from_email, to_email, subject, body):
+def get_weather_html(weather_config):
+    """支持单个地点或多个地点天气"""
+    if not weather_config:
+        return ""
+
+    if isinstance(weather_config, list):
+        html = ""
+
+        for item in weather_config:
+            html += get_single_weather_html(item)
+
+        return html
+
+    if isinstance(weather_config, dict):
+        return get_single_weather_html(weather_config)
+
+    return """
+    <hr>
+    <h2>天气配置错误</h2>
+    <p>weather 字段应为对象或数组。</p>
+    """
+
+
+def send_email(
+    smtp_server,
+    smtp_port,
+    smtp_user,
+    smtp_pass,
+    from_email,
+    to_email,
+    subject,
+    body
+):
     """发送邮件"""
     smtp_port = int(smtp_port)
 
@@ -247,7 +292,12 @@ def send_email(smtp_server, smtp_port, smtp_user, smtp_pass, from_email, to_emai
         return False
 
 
-def send_telegram_notification(tg_id, tg_token, success_emails, failed_emails_with_reasons):
+def send_telegram_notification(
+    tg_id,
+    tg_token,
+    success_emails,
+    failed_emails_with_reasons
+):
     """发送 Telegram 消息"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -302,7 +352,7 @@ if __name__ == "__main__":
 
         body = config["body"]
 
-        # 在邮件正文后面追加天气信息
+        # 追加天气信息，支持单个地点或多个地点
         body += get_weather_html(config.get("weather"))
 
         tg_id, tg_token = load_telegram_config()
