@@ -1,40 +1,31 @@
-{
-  "smtp_server": "smtp.163.com",
-  "smtp_port": 465,
-  "smtp_user": "lihai0093@163.com",
-  "smtp_pass": "PRQKXc2cmcYE25mn",
-  "from_email": "lihai0093@163.com",
-  "to_emails": [
-    "liyongxiang.tech@outlook.com",
-    "libluce1@outlook.com",
-    ""
-  ],
-  "subject": "每日天气提醒",
-  "body": "<p>早上好，以下是今天的天气信息：</p>",
-  "weather": [
-    {
-      "enabled": true,
-      "city": "义乌",
-      "latitude": 29.3069,
-      "longitude": 120.0753,
-      "timezone": "Asia/Shanghai",
-      "forecast_days": 3
-    },
-    {
-      "enabled": true,
-      "city": "东阳",
-      "latitude": 29.2678,
-      "longitude": 120.2253,
-      "timezone": "Asia/Shanghai",
-      "forecast_days": 3
-    },
-    {
-      "enabled": true,
-      "city": "杭州",
-      "latitude": 30.2741,
-      "longitude": 120.1551,
-      "timezone": "Asia/Shanghai",
-      "forecast_days": 3
-    }
-  ]
-}
+name: 自动群发邮件
+
+on:
+  schedule:
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  send_email:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run email sender script
+        env:
+          EMAIL_CONFIG: ${{ secrets.EMAIL_CONFIG }}
+          TG_ID: ${{ secrets.TG_ID }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        run: python send_email.py
